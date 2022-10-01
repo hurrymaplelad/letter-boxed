@@ -3,17 +3,62 @@ import * as readline from 'node:readline/promises';
 import * as process from 'node:process';
 
 const DICTIONARY_PATH = '/usr/share/dict/words';
-
+const MIN_WORD_LENGTH = 3;
+const MAX_WORD_COUNT = 3;
+const MAX_WORD_LENGTH = 5;
 
 async function main() {
   const board = await requestBoard();
   const LetterSet = makeLetterSet(board);
   const validWords = await loadDictionary(makeWordFilter(board), LetterSet);
+
+  console.log('Candidate words:');
   for (const [word, mask] of validWords) {
     console.log(word, "\t", LetterSet.maskToString(mask));
   }
+  console.log('--------------');
   console.log('full', "\t", LetterSet.maskToString(LetterSet.full));
+  console.log('');
+
+  const search = makeSearch({board, validWords, LetterSet});
+  console.log('Searching...');
+  for (const words of search('', [])) {
+    console.log(words.join(' '));
+  }
   process.exit(0);
+}
+
+function makeSearch({board, validWords, LetterSet}) {
+  // Build index of possible next letters from current letter
+  const nextLetters = {'': board.flat()};
+  for (let i=0; i<board.length; i++) {
+    const side = board[i];
+    const next = board.filter((_, index) => i != index).flat();
+    for (let letter of side) {
+      nextLetters[letter] = next;
+    }
+  }
+
+  return function* search(prefix, previousWords) {
+    if (prefix.length >= MAX_WORD_LENGTH) {
+      return;
+    }
+    const previousLetter = prefix[prefix.length-1] ?? '';
+    for (const letter of nextLetters[previousLetter]) {
+      const candidate = prefix + letter;
+      if(validWords.has(candidate)) {
+	// console.log('Found', candidate, 'after', previousWords);
+        const words = [...previousWords, candidate];
+        if (LetterSet.intersect(words.map(w => validWords.get(w))) === LetterSet.full) {
+          yield words;
+	}
+	if (words.length < MAX_WORD_COUNT) {
+	  yield* search(letter, words);
+        }
+      }
+      yield* search(candidate, previousWords);  
+    }
+  }
 }
 
 async function requestBoard() {
@@ -59,7 +104,7 @@ function makeWordFilter(board) {
   const letterRegExp = new RegExp(`^[${board.flat().join()}]+$`, 'i');
   return word => (
     // Is long enough
-    word.length > 2 &&
+    word.length >= MIN_WORD_LENGTH &&
     // Only uses letters on the board
     letterRegExp.test(word)
   );
