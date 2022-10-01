@@ -4,10 +4,15 @@ import * as process from 'node:process';
 
 const DICTIONARY_PATH = '/usr/share/dict/words';
 
+
 async function main() {
   const board = await requestBoard();
-  const validWords = await loadDictionary(makeWordFilter(board));
-  console.log(Array.from(validWords));
+  const LetterSet = makeLetterSet(board);
+  const validWords = await loadDictionary(makeWordFilter(board), LetterSet);
+  for (const [word, mask] of validWords) {
+    console.log(word, "\t", LetterSet.maskToString(mask));
+  }
+  console.log('full', "\t", LetterSet.maskToString(LetterSet.full));
   process.exit(0);
 }
 
@@ -21,10 +26,34 @@ async function requestBoard() {
   console.log("Enter the board, one side per line:");
   for(let i=0; i<4; i++) {
     const input = await rl.question('');
-    sides.push(input.replaceAll(/\s/g, '').split(''));
+    sides.push(input.replaceAll(/\s/g, '').toLowerCase().split(''));
   }
   return sides;
 }
+
+function makeLetterSet(board) {
+  const masksByLetter = {};
+  const letters = board.flat();
+  letters.forEach((letter, i) => {masksByLetter[letter] = 1 << i});
+
+
+  const LetterSet = {
+    make(word) {
+      return LetterSet.intersect(...word.split('').map(x => masksByLetter[x]));
+    },
+    intersect(...sets) {
+      return sets.reduce((left, right) => left | right, LetterSet.empty);
+    },
+    empty: 0,
+    full: (1 << letters.length) - 1,
+    maskToString(mask) {
+      const suffix = (mask >>> 0).toString(2);
+      return '0'.repeat(letters.length - suffix.length) + suffix;
+    },
+  };
+  return LetterSet;
+}
+
 
 function makeWordFilter(board) {
   const letterRegExp = new RegExp(`^[${board.flat().join()}]+$`, 'i');
@@ -36,14 +65,15 @@ function makeWordFilter(board) {
   );
 }
 
-async function loadDictionary(wordFilter) {
- const words = new Set();
+async function loadDictionary(wordFilter, LetterSet) {
+ const words = new Map();
  const file = fs.createReadStream(DICTIONARY_PATH);
  const lines = readline.createInterface({input: file, crlfDelay: Infinity});
 
- for await (const line of lines) {
+ for await (const rawLine of lines) {
+  const line = rawLine.toLowerCase();
   if (wordFilter(line)) {
-    words.add(line.toLowerCase());
+    words.set(line, LetterSet.make(line));
   }
  }
  return words;
