@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as readline from 'node:readline/promises';
 import * as process from 'node:process';
 
-const DICTIONARY_PATH = '/usr/share/dict/words';
+const DICTIONARY_PATH = './words.txt';
 const MIN_WORD_LENGTH = 3;
 const MAX_WORD_COUNT = 2;
 const MAX_WORD_LENGTH = 6;

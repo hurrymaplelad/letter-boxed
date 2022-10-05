@@ -1,0 +1,4 @@
+Word list is from https://github.com/taikuukaits/SimpleWordlists
+with proper nouns, repeated letters, and punctuation filtered out:
+
+grep -Ev "(.)\1|[^a-z]"
