@@ -5,7 +5,6 @@ import * as process from 'node:process';
 const DICTIONARY_PATH = './words.txt';
 const MIN_WORD_LENGTH = 3;
 const MAX_WORD_COUNT = 2;
-const MAX_WORD_LENGTH = 8;
 
 async function main() {
   const board = await requestBoard();
@@ -14,9 +13,10 @@ async function main() {
 
   console.log('Candidate words:', validWords.size);
 
-  console.log('Searching...');
-  for (const words of search({ board, validWords, LetterSet })) {
-    printProgress('Solution:', words.join(' '), '\n');
+  const solutions = Array.from(search({ board, validWords, LetterSet }));
+  solutions.sort((a, b) => b.join().length - a.join().length);
+  for (const solution of solutions) {
+    console.log(...solution, `(${solution.join().length})`);
   }
   process.exit(0);
 }
@@ -32,24 +32,15 @@ function* search({ board, validWords, LetterSet }) {
     }
   }
 
-  function* searchForWords(prefix) {
-    if (prefix.length >= MAX_WORD_LENGTH) {
-      return;
-    }
-    const previousLetter = prefix[prefix.length - 1] ?? '';
-    for (const letter of nextLetters[previousLetter]) {
-      const candidate = prefix + letter;
-      if (validWords.has(candidate)) {
-        yield candidate;
-      }
-      yield* searchForWords(candidate);
-    }
-  }
-
   console.log("Finding words...")
   const wordsByFirstLetter = {};
   for (const letter of board.flat()) {
-    wordsByFirstLetter[letter] = Array.from(searchForWords(letter));
+    wordsByFirstLetter[letter] = [];
+    for (const word of validWords.keys()) {
+      if (word.startsWith(letter)) {
+        wordsByFirstLetter[letter].push(word);
+      }
+    }
   }
 
   console.log("Finding solutions...")
@@ -116,11 +107,14 @@ function makeLetterSet(board) {
 
 function makeWordFilter(board) {
   const letterRegExp = new RegExp(`^[${board.flat().join()}]+$`, '');
+  const invalidMoveRegExp = new RegExp(board.map(side => `[${side.join()}]{2}`).join('|'));
   return word => (
     // Is long enough
     word.length >= MIN_WORD_LENGTH &&
     // Only uses lower case letters on the board
-    letterRegExp.test(word)
+    letterRegExp.test(word) &&
+    // No adjacent letters from the same side of the board
+    !invalidMoveRegExp.test(word)
   );
 }
 
