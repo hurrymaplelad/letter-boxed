@@ -14,16 +14,14 @@ async function main() {
 
   console.log('Candidate words:', validWords.size);
 
-  const search = makeSearch({ board, validWords, LetterSet });
   console.log('Searching...');
-
-  for await (const words of search('', [])) {
+  for (const words of search({ board, validWords, LetterSet })) {
     printProgress('Solution:', words.join(' '), '\n');
   }
   process.exit(0);
 }
 
-function makeSearch({ board, validWords, LetterSet }) {
+function* search({ board, validWords, LetterSet }) {
   // Build index of possible next letters from current letter
   const nextLetters = { '': board.flat() };
   for (let i = 0; i < board.length; i++) {
@@ -34,7 +32,7 @@ function makeSearch({ board, validWords, LetterSet }) {
     }
   }
 
-  return function* search(prefix, previousWords) {
+  function* searchForWords(prefix) {
     if (prefix.length >= MAX_WORD_LENGTH) {
       return;
     }
@@ -42,19 +40,38 @@ function makeSearch({ board, validWords, LetterSet }) {
     for (const letter of nextLetters[previousLetter]) {
       const candidate = prefix + letter;
       if (validWords.has(candidate)) {
-        const words = [...previousWords, candidate];
-        const coveredLetters = LetterSet.intersect(...words.map(w => validWords.get(w)));
-        printProgress(LetterSet.maskToString(coveredLetters), 'Found', words);
-        if (coveredLetters === LetterSet.full) {
-          yield words;
-          return;
-        }
-        if (words.length < MAX_WORD_COUNT) {
-          yield* search(letter, words);
-        }
+        yield candidate;
       }
-      yield* search(candidate, previousWords);
+      yield* searchForWords(candidate);
     }
+  }
+
+  console.log("Finding words...")
+  const wordsByFirstLetter = {};
+  for (const letter of board.flat()) {
+    wordsByFirstLetter[letter] = Array.from(searchForWords(letter));
+  }
+
+  console.log("Finding solutions...")
+  function* searchForSolutions(wordList) {
+    const coveredLetters = LetterSet.intersect(...wordList.map(w => validWords.get(w)));
+    if (coveredLetters === LetterSet.full) {
+      yield wordList;
+      return;
+    }
+    if (wordList.length >= MAX_WORD_COUNT) {
+      return;
+    }
+    const lastWord = wordList[wordList.length - 1];
+    const lastLetter = lastWord[lastWord.length - 1];
+    for (const word of wordsByFirstLetter[lastLetter]) {
+      yield* searchForSolutions([...wordList, word]);
+    }
+  }
+
+  for (const letter of board.flat()) {
+    for (const word of wordsByFirstLetter[letter])
+      yield* searchForSolutions([word]);
   }
 }
 
