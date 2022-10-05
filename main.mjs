@@ -5,7 +5,7 @@ import * as process from 'node:process';
 const DICTIONARY_PATH = './words.txt';
 const MIN_WORD_LENGTH = 3;
 const MAX_WORD_COUNT = 2;
-const MAX_WORD_LENGTH = 6;
+const MAX_WORD_LENGTH = 8;
 
 async function main() {
   const board = await requestBoard();
@@ -16,8 +16,9 @@ async function main() {
 
   const search = makeSearch({ board, validWords, LetterSet });
   console.log('Searching...');
+
   for await (const words of search('', [])) {
-    console.log(words.join(' '));
+    printProgress('Solution:', words.join(' '), '\n');
   }
   process.exit(0);
 }
@@ -41,10 +42,12 @@ function makeSearch({ board, validWords, LetterSet }) {
     for (const letter of nextLetters[previousLetter]) {
       const candidate = prefix + letter;
       if (validWords.has(candidate)) {
-        console.log('Found', candidate);
         const words = [...previousWords, candidate];
-        if (LetterSet.intersect(words.map(w => validWords.get(w))) === LetterSet.full) {
+        const coveredLetters = LetterSet.intersect(...words.map(w => validWords.get(w)));
+        printProgress(LetterSet.maskToString(coveredLetters), 'Found', words);
+        if (coveredLetters === LetterSet.full) {
           yield words;
+          return;
         }
         if (words.length < MAX_WORD_COUNT) {
           yield* search(letter, words);
@@ -116,6 +119,12 @@ async function loadDictionary(wordFilter, LetterSet) {
     }
   }
   return words;
+}
+
+function printProgress(...terms) {
+  process.stdout.clearLine();
+  process.stdout.cursorTo(0);
+  process.stdout.write(terms.join(' '));
 }
 
 main();
